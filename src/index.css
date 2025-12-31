@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+
+  body {
+    @apply m-0 p-0 font-mono bg-monkey-bg text-monkey-text;
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@layer utilities {
+  .text-correct {
+    @apply text-monkey-text;
+  }
+
+  .text-incorrect {
+    @apply text-monkey-error;
+  }
+
+  .text-untyped {
+    @apply text-monkey-muted;
+  }
+
+  .text-current {
+    @apply text-monkey-accent underline;
+  }
+}
+
+
+/* cmdk styles - Linear-like */
+[cmdk-root] {
+  @apply bg-monkey-bg;
+}
+
+[cmdk-dialog] {
+  animation: cmdk-dialog-in 0.2s ease-out;
+}
+
+@keyframes cmdk-dialog-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+[cmdk-input] {
+  @apply bg-transparent text-monkey-text outline-none;
+}
+
+[cmdk-item] {
+  @apply text-monkey-text;
+  transition: background-color 0.15s ease;
+}
+
+[cmdk-item][data-selected="true"] {
+  @apply bg-monkey-accent/20 !important;
+  outline: 1px solid rgba(226, 183, 20, 0.3);
+}
+
+[cmdk-group-heading] {
+  @apply text-monkey-muted;
+  user-select: none;
+}
+
+[cmdk-list] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 102, 105, 0.3) transparent;
+}
+
+[cmdk-list]::-webkit-scrollbar {
+  width: 6px;
+}
+
+[cmdk-list]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[cmdk-list]::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 102, 105, 0.3);
+  border-radius: 3px;
+}
+
+[cmdk-list]::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 102, 105, 0.5);
+}

@@ -1,0 +1,289 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { KeystrokeData } from '../utils/stats';
+import type { Settings } from './useSettings';
+import { generateText, splitIntoLines } from '../utils/wordGenerator';
+import { loadWords } from '../data/words';
+
+export interface TypingTestState {
+  text: string;
+  lines: string[];
+  currentIndex: number;
+  keystrokes: KeystrokeData[];
+  startTime: number | null;
+  endTime: number | null;
+  isComplete: boolean;
+  isStarted: boolean;
+}
+
+export function useTypingTest(settings: Settings) {
+  const [state, setState] = useState<TypingTestState>({
+    text: '',
+    lines: [],
+    currentIndex: 0,
+    keystrokes: [],
+    startTime: null,
+    endTime: null,
+    isComplete: false,
+    isStarted: false,
+  });
+
+  const [words, setWords] = useState<string[]>([]);
+  const timeLimitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Load words on mount and when settings change
+  useEffect(() => {
+    loadWords(settings.expandedWordList).then(setWords);
+  }, [settings.expandedWordList]);
+
+  // Generate new text when settings change or words load
+  useEffect(() => {
+    if (words.length > 0 && !state.isStarted) {
+      const newText = generateText(settings, words);
+      const newLines = splitIntoLines(newText);
+      setState(prev => ({
+        ...prev,
+        text: newText,
+        lines: newLines,
+        currentIndex: 0,
+        keystrokes: [],
+        startTime: null,
+        endTime: null,
+        isComplete: false,
+      }));
+    }
+  }, [settings, words, state.isStarted]);
+
+  const handleKeyPress = useCallback((key: string) => {
+    if (state.isComplete) return;
+
+    const now = Date.now();
+    let newStartTime = state.startTime;
+    let newIsStarted = state.isStarted;
+
+    // Start the test on first keystroke
+    if (!state.isStarted) {
+      newStartTime = now;
+      newIsStarted = true;
+      
+      // Set time limit if in time mode
+      if (settings.lengthMode === 'time' && settings.timeLimit) {
+        timeLimitRef.current = setTimeout(() => {
+          setState(prev => ({
+            ...prev,
+            isComplete: true,
+            endTime: Date.now(),
+          }));
+        }, settings.timeLimit * 1000);
+      }
+    }
+
+    // Handle space key
+    if (key === ' ') {
+      const currentChar = state.text[state.currentIndex];
+      const prevChar = state.currentIndex > 0 ? state.text[state.currentIndex - 1] : null;
+      
+      // Ignore space if we're already at a space (double space) or if previous char was a space
+      if (currentChar === ' ' || prevChar === ' ') {
+        // Just advance past the space(s) without recording keystroke
+        let skipIndex = state.currentIndex;
+        while (skipIndex < state.text.length && state.text[skipIndex] === ' ') {
+          skipIndex++;
+        }
+        
+        if (skipIndex < state.text.length) {
+          setState(prev => ({
+            ...prev,
+            currentIndex: skipIndex,
+            startTime: newStartTime,
+            isStarted: newIsStarted,
+          }));
+        }
+        return; // Ignore the space keystroke
+      }
+      
+      // If we're not at a space, jump to the next space (end of current word)
+      if (currentChar !== ' ') {
+        let jumpIndex = state.currentIndex;
+        // Find the next space
+        while (jumpIndex < state.text.length && state.text[jumpIndex] !== ' ') {
+          jumpIndex++;
+        }
+        // If we found a space, jump to it and process the space
+        if (jumpIndex < state.text.length) {
+          // Mark all skipped characters as skipped
+          const newKeystrokes = [...state.keystrokes];
+          for (let i = state.currentIndex; i < jumpIndex; i++) {
+            newKeystrokes.push({
+              timestamp: now,
+              char: state.text[i],
+              correct: false,
+              skipped: true,
+            });
+          }
+          
+          // Now process the space at jumpIndex
+          const isComplete = jumpIndex + 1 >= state.text.length;
+          newKeystrokes.push({
+            timestamp: now,
+            char: ' ',
+            correct: true, // Space is correct since we jumped to it
+          });
+
+          setState(prev => ({
+            ...prev,
+            currentIndex: jumpIndex + 1,
+            keystrokes: newKeystrokes,
+            startTime: newStartTime,
+            isStarted: newIsStarted,
+            isComplete: isComplete || (settings.lengthMode === 'time' && jumpIndex + 1 >= state.text.length),
+            endTime: isComplete ? now : prev.endTime,
+          }));
+
+          // Clean up timeout if test completes early
+          if (isComplete && timeLimitRef.current) {
+            clearTimeout(timeLimitRef.current);
+            timeLimitRef.current = null;
+          }
+          
+          return; // Early return, we've handled the space
+        }
+        // If no space found (end of text), fall through to normal handling
+      }
+    }
+
+    // Normal character handling
+    const expectedChar = state.text[state.currentIndex];
+    const isCorrect = key === expectedChar;
+    const isComplete = state.currentIndex + 1 >= state.text.length;
+
+    const newKeystroke: KeystrokeData = {
+      timestamp: now,
+      char: key,
+      correct: isCorrect,
+    };
+
+    setState(prev => ({
+      ...prev,
+      currentIndex: prev.currentIndex + 1,
+      keystrokes: [...prev.keystrokes, newKeystroke],
+      startTime: newStartTime,
+      isStarted: newIsStarted,
+      isComplete: isComplete || (settings.lengthMode === 'time' && prev.currentIndex + 1 >= state.text.length),
+      endTime: isComplete ? now : prev.endTime,
+    }));
+
+    // Clean up timeout if test completes early
+    if (isComplete && timeLimitRef.current) {
+      clearTimeout(timeLimitRef.current);
+      timeLimitRef.current = null;
+    }
+  }, [state, settings]);
+
+  const handleBackspace = useCallback(() => {
+    if (state.currentIndex === 0 || state.isComplete) return;
+
+    setState(prev => {
+      const newIndex = prev.currentIndex - 1;
+      const newKeystrokes = [...prev.keystrokes];
+      
+      // Mark the previous keystroke as corrected
+      if (newKeystrokes[newIndex]) {
+        newKeystrokes[newIndex] = {
+          ...newKeystrokes[newIndex],
+          corrected: true,
+        };
+      }
+
+      return {
+        ...prev,
+        currentIndex: newIndex,
+        keystrokes: newKeystrokes,
+        isComplete: false, // Uncomplete if we go back
+      };
+    });
+  }, [state]);
+
+  const handleBackspaceWord = useCallback(() => {
+    if (state.currentIndex === 0 || state.isComplete) return;
+
+    setState(prev => {
+      let newIndex = prev.currentIndex;
+      const text = prev.text;
+      
+      // Find the start of the current word
+      // If we're at a space, skip it and find the previous word
+      if (newIndex > 0 && text[newIndex - 1] === ' ') {
+        newIndex = newIndex - 1; // Skip the space
+      }
+      
+      // Go back to find the start of the word (space or beginning)
+      while (newIndex > 0 && text[newIndex - 1] !== ' ') {
+        newIndex = newIndex - 1;
+      }
+
+      // Mark all keystrokes from newIndex to currentIndex as corrected
+      const newKeystrokes = [...prev.keystrokes];
+      for (let i = newIndex; i < prev.currentIndex; i++) {
+        if (newKeystrokes[i]) {
+          newKeystrokes[i] = {
+            ...newKeystrokes[i],
+            corrected: true,
+          };
+        }
+      }
+
+      return {
+        ...prev,
+        currentIndex: newIndex,
+        keystrokes: newKeystrokes,
+        isComplete: false,
+      };
+    });
+  }, [state]);
+
+  const reset = useCallback(() => {
+    if (timeLimitRef.current) {
+      clearTimeout(timeLimitRef.current);
+      timeLimitRef.current = null;
+    }
+
+    if (words.length > 0) {
+      const newText = generateText(settings, words);
+      const newLines = splitIntoLines(newText);
+      setState({
+        text: newText,
+        lines: newLines,
+        currentIndex: 0,
+        keystrokes: [],
+        startTime: null,
+        endTime: null,
+        isComplete: false,
+        isStarted: false,
+      });
+    }
+  }, [settings, words]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (timeLimitRef.current) {
+        clearTimeout(timeLimitRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    text: state.text,
+    lines: state.lines,
+    currentIndex: state.currentIndex,
+    keystrokes: state.keystrokes,
+    startTime: state.startTime,
+    endTime: state.endTime,
+    isComplete: state.isComplete,
+    isStarted: state.isStarted,
+    handleKeyPress,
+    handleBackspace,
+    handleBackspaceWord,
+    reset,
+  };
+}
