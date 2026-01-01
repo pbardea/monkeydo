@@ -113,20 +113,20 @@ export function useTypingTest(settings: Settings) {
           // Mark all skipped characters as skipped
           const newKeystrokes = [...state.keystrokes];
           for (let i = state.currentIndex; i < jumpIndex; i++) {
-            newKeystrokes.push({
+            newKeystrokes[i] = {
               timestamp: now,
               char: state.text[i],
               correct: false,
               skipped: true,
-            });
+            };
           }
           
           // Now process the space at jumpIndex
-          newKeystrokes.push({
+          newKeystrokes[jumpIndex] = {
             timestamp: now,
             char: ' ',
             correct: true, // Space is correct since we jumped to it
-          });
+          };
 
           setState(prev => {
             const newIndex = jumpIndex + 1;
@@ -169,10 +169,14 @@ export function useTypingTest(settings: Settings) {
       const newIndex = prev.currentIndex + 1;
       const testComplete = newIndex >= prev.text.length;
       
+      // Replace keystroke at current position instead of appending
+      const newKeystrokes = [...prev.keystrokes];
+      newKeystrokes[prev.currentIndex] = newKeystroke;
+      
       return {
         ...prev,
         currentIndex: newIndex,
-        keystrokes: [...prev.keystrokes, newKeystroke],
+        keystrokes: newKeystrokes,
         startTime: newStartTime,
         isStarted: newIsStarted,
         isComplete: testComplete,
