@@ -122,25 +122,29 @@ export function useTypingTest(settings: Settings) {
           }
           
           // Now process the space at jumpIndex
-          const isComplete = jumpIndex + 1 >= state.text.length;
           newKeystrokes.push({
             timestamp: now,
             char: ' ',
             correct: true, // Space is correct since we jumped to it
           });
 
-          setState(prev => ({
-            ...prev,
-            currentIndex: jumpIndex + 1,
-            keystrokes: newKeystrokes,
-            startTime: newStartTime,
-            isStarted: newIsStarted,
-            isComplete: isComplete || (settings.lengthMode === 'time' && jumpIndex + 1 >= state.text.length),
-            endTime: isComplete ? now : prev.endTime,
-          }));
+          setState(prev => {
+            const newIndex = jumpIndex + 1;
+            const testComplete = newIndex >= prev.text.length;
+            
+            return {
+              ...prev,
+              currentIndex: newIndex,
+              keystrokes: newKeystrokes,
+              startTime: newStartTime,
+              isStarted: newIsStarted,
+              isComplete: testComplete,
+              endTime: testComplete ? now : prev.endTime,
+            };
+          });
 
           // Clean up timeout if test completes early
-          if (isComplete && timeLimitRef.current) {
+          if (jumpIndex + 1 >= state.text.length && timeLimitRef.current) {
             clearTimeout(timeLimitRef.current);
             timeLimitRef.current = null;
           }
@@ -154,7 +158,6 @@ export function useTypingTest(settings: Settings) {
     // Normal character handling
     const expectedChar = state.text[state.currentIndex];
     const isCorrect = key === expectedChar;
-    const isComplete = state.currentIndex + 1 >= state.text.length;
 
     const newKeystroke: KeystrokeData = {
       timestamp: now,
@@ -162,18 +165,23 @@ export function useTypingTest(settings: Settings) {
       correct: isCorrect,
     };
 
-    setState(prev => ({
-      ...prev,
-      currentIndex: prev.currentIndex + 1,
-      keystrokes: [...prev.keystrokes, newKeystroke],
-      startTime: newStartTime,
-      isStarted: newIsStarted,
-      isComplete: isComplete || (settings.lengthMode === 'time' && prev.currentIndex + 1 >= state.text.length),
-      endTime: isComplete ? now : prev.endTime,
-    }));
+    setState(prev => {
+      const newIndex = prev.currentIndex + 1;
+      const testComplete = newIndex >= prev.text.length;
+      
+      return {
+        ...prev,
+        currentIndex: newIndex,
+        keystrokes: [...prev.keystrokes, newKeystroke],
+        startTime: newStartTime,
+        isStarted: newIsStarted,
+        isComplete: testComplete,
+        endTime: testComplete ? now : prev.endTime,
+      };
+    });
 
     // Clean up timeout if test completes early
-    if (isComplete && timeLimitRef.current) {
+    if (state.currentIndex + 1 >= state.text.length && timeLimitRef.current) {
       clearTimeout(timeLimitRef.current);
       timeLimitRef.current = null;
     }
