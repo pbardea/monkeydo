@@ -57,24 +57,16 @@ export function useTypingTest(settings: Settings) {
     if (state.isComplete) return;
 
     const now = Date.now();
-    let newStartTime = state.startTime;
-    let newIsStarted = state.isStarted;
 
-    // Start the test on first keystroke
-    if (!state.isStarted) {
-      newStartTime = now;
-      newIsStarted = true;
-      
-      // Set time limit if in time mode
-      if (settings.lengthMode === 'time' && settings.timeLimit) {
-        timeLimitRef.current = setTimeout(() => {
-          setState(prev => ({
-            ...prev,
-            isComplete: true,
-            endTime: Date.now(),
-          }));
-        }, settings.timeLimit * 1000);
-      }
+    // Set time limit if in time mode (on first keystroke)
+    if (!state.isStarted && settings.lengthMode === 'time' && settings.timeLimit) {
+      timeLimitRef.current = setTimeout(() => {
+        setState(prev => ({
+          ...prev,
+          isComplete: true,
+          endTime: Date.now(),
+        }));
+      }, settings.timeLimit * 1000);
     }
 
     // Handle space key
