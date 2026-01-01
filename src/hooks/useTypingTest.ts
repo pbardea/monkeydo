@@ -94,8 +94,8 @@ export function useTypingTest(settings: Settings) {
           setState(prev => ({
             ...prev,
             currentIndex: skipIndex,
-            startTime: newStartTime,
-            isStarted: newIsStarted,
+            startTime: prev.startTime ?? now,
+            isStarted: true,
           }));
         }
         return; // Ignore the space keystroke
@@ -103,55 +103,57 @@ export function useTypingTest(settings: Settings) {
       
       // If we're not at a space, jump to the next space (end of current word)
       if (currentChar !== ' ') {
-        let jumpIndex = state.currentIndex;
-        // Find the next space
-        while (jumpIndex < state.text.length && state.text[jumpIndex] !== ' ') {
-          jumpIndex++;
-        }
-        // If we found a space, jump to it and process the space
-        if (jumpIndex < state.text.length) {
-          // Mark all skipped characters as skipped
-          const newKeystrokes = [...state.keystrokes];
-          for (let i = state.currentIndex; i < jumpIndex; i++) {
+        setState(prev => {
+          let jumpIndex = prev.currentIndex;
+          // Find the next space
+          while (jumpIndex < prev.text.length && prev.text[jumpIndex] !== ' ') {
+            jumpIndex++;
+          }
+          
+          // Mark all remaining characters as skipped
+          const newKeystrokes = [...prev.keystrokes];
+          for (let i = prev.currentIndex; i < jumpIndex; i++) {
             newKeystrokes[i] = {
               timestamp: now,
-              char: state.text[i],
+              char: prev.text[i],
               correct: false,
               skipped: true,
             };
           }
           
-          // Now process the space at jumpIndex
-          newKeystrokes[jumpIndex] = {
-            timestamp: now,
-            char: ' ',
-            correct: true, // Space is correct since we jumped to it
-          };
-
-          setState(prev => {
-            const newIndex = jumpIndex + 1;
-            const testComplete = newIndex >= prev.text.length;
-            
-            return {
-              ...prev,
-              currentIndex: newIndex,
-              keystrokes: newKeystrokes,
-              startTime: newStartTime,
-              isStarted: newIsStarted,
-              isComplete: testComplete,
-              endTime: testComplete ? now : prev.endTime,
+          // If we found a space, add it to keystrokes
+          if (jumpIndex < prev.text.length) {
+            newKeystrokes[jumpIndex] = {
+              timestamp: now,
+              char: ' ',
+              correct: true,
             };
-          });
+          }
 
-          // Clean up timeout if test completes early
-          if (jumpIndex + 1 >= state.text.length && timeLimitRef.current) {
+          const newIndex = jumpIndex < prev.text.length ? jumpIndex + 1 : jumpIndex;
+          const testComplete = newIndex >= prev.text.length;
+          
+          // Clean up timeout if test completes
+          if (testComplete && timeLimitRef.current) {
             clearTimeout(timeLimitRef.current);
             timeLimitRef.current = null;
           }
           
-          return; // Early return, we've handled the space
-        }
-        // If no space found (end of text), fall through to normal handling
+          // Use prev.startTime if already set, otherwise use now (first keystroke)
+          const finalStartTime = prev.startTime ?? now;
+          
+          return {
+            ...prev,
+            currentIndex: newIndex,
+            keystrokes: newKeystrokes,
+            startTime: finalStartTime,
+            isStarted: true,
+            isComplete: testComplete,
+            endTime: testComplete ? now : prev.endTime,
+          };
+        });
+        
+        return; // Early return, we've handled the space
       }
     }
 
@@ -173,12 +175,15 @@ export function useTypingTest(settings: Settings) {
       const newKeystrokes = [...prev.keystrokes];
       newKeystrokes[prev.currentIndex] = newKeystroke;
       
+      // Use prev.startTime if already set, otherwise use now (first keystroke)
+      const finalStartTime = prev.startTime ?? now;
+      
       return {
         ...prev,
         currentIndex: newIndex,
         keystrokes: newKeystrokes,
-        startTime: newStartTime,
-        isStarted: newIsStarted,
+        startTime: finalStartTime,
+        isStarted: true,
         isComplete: testComplete,
         endTime: testComplete ? now : prev.endTime,
       };

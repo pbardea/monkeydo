@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TypingTest } from './components/TypingTest';
 import { Results } from './components/Results';
 import { CommandPalette } from './components/CommandPalette';
@@ -32,10 +32,10 @@ function App() {
     endTime: number;
   } | null>(null);
 
-  const handleComplete = (state: { keystrokes: any[]; startTime: number; endTime: number }) => {
+  const handleComplete = useCallback((state: { keystrokes: any[]; startTime: number; endTime: number }) => {
     setTestState(state);
     setShowResults(true);
-  };
+  }, []);
 
   const handleRestart = () => {
     setShowResults(false);
